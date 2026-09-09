@@ -84,9 +84,24 @@ nada de `client/src`. Resultados:
    (`api/server/index.js:338`) produce `Access-Control-Allow-Origin: *` y
    `Access-Control-Allow-Headers: authorization`, sin `Allow-Credentials`, y no es
    configurable por variables de entorno.
-7. **Embeber LibreChat en otro portal está soportado oficialmente:**
-   `CSP_FRAME_ANCESTORS` (`packages/api/src/security/csp.ts:164`) junto con
-   `X_FRAME_OPTIONS=off`, documentado en `.env.example:155-158`.
+7. **Embeber LibreChat en otro portal está soportado oficialmente, con un matiz.**
+   Verificado ejecutando: `X_FRAME_OPTIONS=off` quita el header `X-Frame-Options`, pero
+   `CSP_FRAME_ANCESTORS` **no hace nada por sí solo** — el CSP está apagado por defecto
+   (`CSP_ENABLED`, `.env.example:117`) y, al encenderlo, arranca en modo *report-only*
+   salvo que se ponga `CSP_REPORT_ONLY=false`. Con las tres variables, la respuesta trae:
+
+   ```
+   Content-Security-Policy: … frame-ancestors 'self' https://canvas.uc.cl
+   ```
+
+   Es decir: para *permitir* el iframe basta apagar `X-Frame-Options`; para *restringir
+   quién* puede embeber —lo correcto— hay que encender el CSP explícitamente.
+
+   **Hallazgo adicional, verificado:** el nonce del CSP se inyecta también en un
+   `index.html` propio colocado en `client/dist` (`api/server/index.js:299`,
+   `applyCspNonce`). Una interfaz propia **hereda la postura de seguridad de LibreChat**
+   en vez de perderla — lo comprobé sirviendo mi propio HTML y viendo el
+   `nonce="…"` aplicado a sus scripts.
 8. **Sesión de 15 minutos, refresh de 7 días** (`.env.example:885-886`), con el refresh
    en cookie httpOnly.
 
