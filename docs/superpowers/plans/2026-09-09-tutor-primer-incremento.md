@@ -278,6 +278,67 @@ git commit -m "feat: configuración del tutor y marca del curso"
 
 ---
 
+---
+
+### Tarea 4: Una cohorte con su propia configuración
+
+Esta tarea existe porque el análisis encontró una palanca que no estaba en el diseño
+inicial: LibreChat guarda overrides de configuración por principal en Mongo
+(`packages/data-schemas/src/schema/config.ts`: `principalType`, `principalId`,
+`priority`, `overrides`, `tenantId`) y los expone por HTTP. Eso permite que cada curso
+vea su propio tutor **sin reiniciar el servidor y sin un yaml por curso**.
+
+**Archivos:**
+- Crear: `tutor/cohortes/README.md`
+- Crear: `tutor/cohortes/aplicar.sh`
+
+**Interfaces:**
+- Consume: el servicio de la Tarea 1 y el endpoint `Tutor` de la Tarea 3.
+- Produce: un grupo con miembros y un documento de override asociado a ese grupo.
+
+- [ ] **Paso 1: Comprobar la superficie de administración**
+
+Ejecutar: `curl -s -H "Authorization: Bearer $ADMIN_TOKEN" http://localhost:3080/api/admin/config/ | head -c 300`
+Esperado: 200 con la lista de configuraciones (vacía al principio).
+Las rutas disponibles son `GET /`, `GET /base`, y por principal
+`GET|PUT /:principalType/:principalId`, más `PATCH`/`DELETE` sobre `/fields`
+(`api/server/routes/admin/config.js:38-44`). Todas exigen rol de administrador
+(`router.use(requireJwtAuth, requireAdminAccess)`, línea 36).
+
+- [ ] **Paso 2: Crear el grupo del curso**
+
+Ejecutar contra `/api/admin/groups` con el nombre del curso. Anotar el `_id` devuelto:
+es el `principalId` del paso siguiente.
+
+- [ ] **Paso 3: Escribir el override de ese grupo**
+
+```bash
+curl -X PUT "http://localhost:3080/api/admin/config/group/$GROUP_ID" \
+  -H "Authorization: Bearer $ADMIN_TOKEN" \
+  -H "Content-Type: application/json" \
+  -d '{"priority": 10,
+       "overrides": {"interface": {"customWelcome": "Bienvenido a Cálculo I. Soy tu tutor."}}}'
+```
+
+- [ ] **Paso 4: Verificar que un estudiante del grupo recibe la configuración**
+
+Ejecutar: `curl -s -H "Authorization: Bearer $TOKEN_ESTUDIANTE" http://localhost:3080/api/config | grep -o 'customWelcome[^,]*'`
+Esperado: el mensaje del curso, no el genérico. Comprobar además con un estudiante que
+**no** pertenece al grupo: debe recibir el mensaje base. Sin esa segunda comprobación no
+se sabe si el override se aplicó o si simplemente cambió la configuración global.
+
+Nota de operación: la resolución está cacheada 60 segundos, así que un cambio no se ve
+de inmediato.
+
+- [ ] **Paso 5: Commit**
+
+```bash
+git add tutor/cohortes
+git commit -m "feat: configuración por cohorte mediante overrides de grupo"
+```
+
+---
+
 ## Lo que este plan deliberadamente no cubre
 
 - **La interfaz propia (SPA).** Depende de las decisiones abiertas del spec §8, en
