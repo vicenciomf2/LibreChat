@@ -111,6 +111,18 @@ debe quedar en el mismo origen que la API.
 - **Temas como datos:** `packages/client/src/theme/` define un `ThemeDefinition`
   versionado (`version: 1`), aplicable por `ThemeProvider` o por variables
   `REACT_APP_THEME_*`, con adaptadores legacy.
+- **Identidad del estudiante propagada a sistemas externos:** los servidores MCP admiten
+  `Authorization: Bearer {{LIBRECHAT_OPENID_ACCESS_TOKEN}}` (`librechat.example.yaml:483`),
+  y además hay un flujo *on-behalf-of* completo — intercambio del token del usuario por
+  uno para el servicio destino (`packages/api/src/mcp/oauth/obo.ts`,
+  `packages/api/src/mcp/MCPManager.ts:1195`).
+
+  Esto importa para el caso concreto: **un tutor conectado a Canvas por MCP podría
+  consultar los cursos, plazos y entregas de cada estudiante con los permisos de ese
+  estudiante**, sin credenciales compartidas ni un servicio propio que replique esos
+  datos. Es la vía correcta para integrar el LMS, y no requiere escribir backend — solo
+  un servidor MCP y configuración. (No verificado en ejecución: exige un despliegue con
+  OIDC institucional real.)
 
 ### 2.5 Lo que sí costaría reimplementar
 
@@ -224,6 +236,35 @@ lockfile propio y vigilando el tamaño del bundle.
 Dos advertencias del empaquetado: `librechat-data-provider` importa `crypto` y `url` de
 Node, que Vite externaliza para el navegador. No rompió nada en esta prueba, pero hay que
 comprobarlo en las rutas de código que se usen de verdad.
+
+### 5.2 El esqueleto completo, funcionando
+
+Las tres verificaciones anteriores prueban piezas sueltas. Esta las une: se compiló una
+SPA propia de ~120 líneas (sin usar nada de `client/src`), se copió a `client/dist`, se
+levantó LibreChat, y se manejó la página en un Chromium real.
+
+Resultado, con cero errores de consola:
+
+```
+título de la página: Tutor
+estado inicial: sin sesión
+tras login: sesión iniciada como spike-1@example.com
+--- conversación en pantalla ---
+   estudiante: ¿Me explicas la regla de la cadena?
+   tutor: Respuesta del tutor mock a: ¿Me explicas la regla de la cadena?
+conversationId persistido: aef4f2b7-ff1f-4ac3-bf4f-c97e04240683
+```
+
+La SPA obtiene la ruta de chat del paquete oficial (`EndpointURLs[EModelEndpoint.agents]`),
+registra al estudiante, inicia sesión, ejecuta las dos fases del protocolo y pinta los
+deltas del stream a medida que llegan.
+
+**Esto es la arquitectura de §4 funcionando de extremo a extremo.** Lo que queda por
+construir para un producto real es interfaz y pedagogía, no integración: la integración
+está demostrada.
+
+El código del esqueleto es material de spike, deliberadamente desechable — sin estilos,
+sin manejo de errores, sin reanudación de stream. Su valor es la evidencia, no el código.
 
 ## 6. Riesgos y mitigaciones
 
