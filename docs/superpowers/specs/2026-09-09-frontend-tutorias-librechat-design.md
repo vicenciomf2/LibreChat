@@ -301,6 +301,31 @@ Lo que esto le hace al resto del diseño: la capa 3 deja de ser "el segundo incr
 pasa a ser el producto. La capa 4 (satélite) se disuelve — el gestor de notas *es* esa
 capa, y ya existe.
 
+#### Verificado ejecutando (no supuesto)
+
+Se montó la topología completa —proxy en `:8080`, dos aplicaciones distintas, LibreChat
+detrás— y se manejó con un navegador real, un solo contexto, como un estudiante:
+
+```
+APP A (Mis notas)
+   estado inicial: sin sesión
+   tras login:     sesión iniciada en el gestor como estudiante1@example.com
+   cookies del dominio: refreshToken(httpOnly=true, sameSite=Strict, path=/),
+                        token_provider(httpOnly=true, sameSite=Strict, path=/)
+
+APP B (Tutor) — nunca vio email ni contraseña
+   sesión recuperada sin volver a iniciar sesión: estudiante1@example.com
+   tutor: Respuesta del tutor mock a: ¿Qué es una derivada?
+
+errores de consola: ninguno
+```
+
+La app B no recibe el token de la app A: lo pide ella misma a `POST /api/auth/refresh`, y
+el navegador adjunta la cookie del dominio. **La sesión compartida entre las dos
+aplicaciones no requiere escribir nada**: es una consecuencia de servirlas bajo un mismo
+origen. Eso es lo único genuinamente nuevo de esta arquitectura respecto del esqueleto de
+§5.2, y ya está probado.
+
 ### 4.1 El contrato de actualización
 
 Lo que hace que esto "sobreviva" no es la elección de capas, sino un contrato explícito y
