@@ -62,6 +62,14 @@ nada de `client/src`. Resultados:
    propio, lo sirve en `/` sin que se toque un solo archivo de `client/src`.
    `client/dist` está ignorado por git (`.gitignore:38`), así que sustituirlo no ensucia
    el árbol ni genera conflictos con upstream.
+
+   Matiz que conviene conocer antes de montar una SPA propia: el contrato no es sólo
+   `client/dist`. El servidor también sirve `client/public/assets` y `client/public/fonts`,
+   y **reescribe el HTML al vuelo**: sustituye los literales `base href="/"` y
+   `lang="en-US"`, inyecta el bootstrap de devtools y estampa el nonce del CSP
+   (`api/server/index.js:286-300`). Un `index.html` propio que no contenga esos literales
+   simplemente no recibe esas sustituciones — el despliegue en subdirectorio y el idioma
+   del documento dejan de funcionar, en silencio.
 2. **La autenticación funciona desde fuera:** `POST /api/auth/register` y
    `POST /api/auth/login` → `{token, user}` (JWT) más cookies `refreshToken` y
    `token_provider`.
@@ -116,16 +124,38 @@ debe quedar en el mismo origen que la API.
   institucional (Entra ID).
 - **Memoria del estudiante:** `schema/memory.ts` — entradas por usuario, con clave
   validada y partición opcional por agente.
-- **Panel de uso y de contenido de conversaciones:** `/api/insights`, con permiso
-  `VIEW_INSIGHTS` otorgable a usuarios, grupos o roles, y flag `ENABLE_INSIGHTS`
-  (`docs/agent-insights-access-design.md`). Es la base de un panel docente.
+- **Panel de uso por agente:** `/api/insights`, con permiso `VIEW_INSIGHTS` otorgable a
+  usuarios, grupos o roles, y flag `ENABLE_INSIGHTS` (`docs/agent-insights-access-design.md`).
+  Precisión importante: entrega **agregados y metadatos**, no transcripciones. Por
+  conversación devuelve `conversationId`, agente, fecha, usuario, email, `firstMessage`,
+  número de mensajes y tokens (`packages/data-provider/src/types/insights.ts:44-56`); el
+  propio documento de diseño declara que ver transcripciones está fuera de alcance.
+
+  Sirve para "cuántos estudiantes usan el tutor, cuánto y con qué empiezan"; **no** para
+  "qué le respondió el tutor a este estudiante". Un panel docente que necesite lo segundo
+  es desarrollo propio.
+- **Configuración por rol, grupo o usuario:** existe una capa de overrides en Mongo
+  (`packages/data-schemas/src/schema/config.ts`) con `principalType`, `principalId`,
+  `priority` y `tenantId`, editable por `/api/admin/config/:principalType/:principalId`,
+  cuyo resultado se mezcla en `GET /api/config`. **Es la palanca más fuerte que encontré
+  para tutorías**: permite que cada cohorte vea una configuración distinta —su tutor, sus
+  permisos, su mensaje de bienvenida— sin reiniciar el servidor ni desplegar nada.
 - **Pedagogía como configuración:** agents con instrucciones, prompts, RAG/file search,
   MCP y endpoints custom se declaran en `librechat.yaml` (1.329 líneas de superficie
   declarativa; la ruta del archivo es configurable con `CONFIG_PATH`,
   `api/server/services/Config/loadCustomConfig.js:73`).
-- **Temas como datos:** `packages/client/src/theme/` define un `ThemeDefinition`
-  versionado (`version: 1`), aplicable por `ThemeProvider` o por variables
-  `REACT_APP_THEME_*`, con adaptadores legacy.
+- **Temas como datos, pero en tiempo de build:** `packages/client/src/theme/` define un
+  `ThemeDefinition` versionado (`version: 1`) aplicable por `ThemeProvider`. La vía
+  declarativa son las variables `REACT_APP_THEME_*` — y aquí está el matiz que cambia el
+  diseño: `client/src/utils/getThemeFromEnv.js:11` las lee de `import.meta.env`, es decir
+  **Vite las inlinea al compilar**. No son configuración de despliegue.
+
+  **Consecuencia:** con la imagen oficial vanilla no se puede cambiar la paleta, ni el
+  título, ni el favicon, ni el logo — el shell HTML los trae como literales y no hay
+  ninguna clave de marca en `librechat.yaml`. Cambiar la identidad visual exige
+  reconstruir el bundle... o servir uno propio. Esto es exactamente lo que hace la capa 3
+  del diseño, y es un argumento a su favor que no había considerado: **para una
+  universidad que necesita su propia identidad visual, "solo configuración" no alcanza.**
 - **Identidad del estudiante propagada a sistemas externos:** los servidores MCP admiten
   `Authorization: Bearer {{LIBRECHAT_OPENID_ACCESS_TOKEN}}` (`librechat.example.yaml:483`),
   y además hay un flujo *on-behalf-of* completo — intercambio del token del usuario por
@@ -151,6 +181,11 @@ Mitigación disponible: `createPayload` — la función que arma el cuerpo del P
 vive en `packages/data-provider/src/createPayload.ts` y se exporta desde el índice del
 paquete, que **se publica en npm**. No hay que replicarla a mano.
 
+Y los **tipos del protocolo** también son importables: `packages/data-provider/src/types/runs.ts`
+define los nombres de evento, tipos de contenido y formas de payload del stream. Lo que no
+está publicado es la *máquina de estados* que los consume. Es decir: no hay que adivinar el
+contrato, solo implementar la reducción de eventos a mensajes.
+
 ## 3. Las cuatro maneras de acoplarse, ordenadas por lo que cuestan
 
 | Vía | A qué te acoplas | Qué cambia por release | Veredicto |
@@ -159,6 +194,40 @@ paquete, que **se publica en npm**. No hay que replicarla a mano.
 | Solo configuración | `librechat.yaml` + env | Aditivo | Necesaria, insuficiente sola |
 | SPA propia sobre el contrato HTTP | Rutas + protocolo versionado | +70/−7 líneas | **Núcleo de la propuesta** |
 | Capa satélite alrededor | Nada de LibreChat | Nada | Complemento para lo que falta |
+
+### 3.1 Contraste con un panel independiente
+
+Se generaron cinco arquitecturas candidatas de forma independiente y se juzgó cada una
+con cuatro lentes separadas (costo de actualización, esfuerzo hasta el primer estudiante,
+techo funcional para tutorías, riesgo operacional y de datos). Promedios:
+
+| Arquitectura | Upgrade | Esfuerzo | Techo | Riesgo | Promedio |
+|---|---|---|---|---|---|
+| Solo configuración | 8 | 9 | 6 | 8 | **7,75** |
+| Portal propio + LibreChat embebido | 8,5 | 8 | 6 | 8 | **7,63** |
+| Tutoría como agente + consola aparte | 7 | 9 | 7 | 5 | **7,00** |
+| SPA propia headless | 7 | 3 | 8,5 | 5,5 | **6,00** |
+| Fork del cliente (versión más disciplinada posible) | 5 | 7 | 4 | 6 | **5,50** |
+
+Dos lecturas importan más que el orden:
+
+1. **El fork queda último incluso en su mejor versión.** El defensor del ángulo midió que
+   `ChatForm.tsx` pasó de 364 a 946 líneas en seis meses conservando el 59% de sus líneas,
+   que `Nav.tsx` fue **borrado** y reemplazado por otro componente, y que upstream usa
+   squash merges (0 merge commits en 12 meses), así que cada PR llega como un commit
+   gigante imposible de bisecar. Su propia conclusión coincide con la de este diseño.
+
+2. **La SPA propia gana en techo (8,5) y pierde en esfuerzo (3/10).** La crítica textual
+   del juez es que "no hay entregable intermedio: el estudiante no puede usar nada hasta
+   que estén terminadas varias piezas a la vez". Es una crítica correcta — y es
+   exactamente la razón por la que §7 pone configuración y guardián en el primer
+   incremento y la SPA en el segundo. El diseño ya la incorpora.
+
+El panel puntúa "solo configuración" primera por esfuerzo y costo de actualización. Su
+techo (6/10) es el límite real, y §2.4 lo explica: sin tocar el bundle no se puede cambiar
+la paleta, el título ni el logo. Para un piloto eso basta; para un producto con identidad
+institucional, no. De ahí que la arquitectura propuesta sea configuración **primero** y
+SPA **después**, no una u otra.
 
 ## 4. Arquitectura propuesta: cáscara propia sobre núcleo intacto
 
@@ -247,6 +316,13 @@ el bundle con solo esos dos imports pesa 1,07 MB sin dividir.
 es el contrato tipado. Adoptar `@librechat/client` es una decisión aparte, con costo de
 mantenimiento propio: conviene tomarla sólo si se van a usar bastantes componentes, con
 lockfile propio y vigilando el tamaño del bundle.
+
+**Advertencia sobre las versiones npm:** el número publicado coincide con el del repo
+(0.8.522 / 0.4.77), pero el tarball no es el árbol de trabajo: se publicó el 2026-09-03 y
+desde entonces hay 22 commits sobre `packages/data-provider/src` que no están en npm. Una
+app externa consume la versión publicada, que es lo correcto — pero al depurar contra un
+LibreChat más nuevo que el paquete, la diferencia explica discrepancias que de otro modo
+parecen bugs.
 
 Dos advertencias del empaquetado: `librechat-data-provider` importa `crypto` y `url` de
 Node, que Vite externaliza para el navegador. No rompió nada en esta prueba, pero hay que
