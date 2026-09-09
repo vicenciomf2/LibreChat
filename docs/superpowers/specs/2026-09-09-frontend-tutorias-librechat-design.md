@@ -142,7 +142,7 @@ código.
 
 Cuatro capas, de más estable a más nuestra:
 
-1. **Núcleo (LibreChat vanilla, sin fork).** Imagen `registry.librechat.ai/danny-avila/librechat:vX.Y.Z`.
+1. **Núcleo (LibreChat vanilla, sin fork).** Imagen `ghcr.io/danny-avila/librechat:vX.Y.Z` (CI publica a ghcr.io y Docker Hub; `registry.librechat.ai` es un espejo).
    Actualizar = cambiar el tag y reiniciar.
 2. **Configuración declarativa.** `librechat.yaml` montado por bind mount + variables de
    entorno. Aquí vive: la marca (`REACT_APP_THEME_*`), los permisos por rol, el registro,
@@ -183,7 +183,7 @@ las actualizaciones" es una intención.
 ## 5. Stack propuesto para la SPA
 
 La elección no es de gusto: **adoptar el stack que los paquetes de LibreChat ya esperan**
-minimiza la fricción, porque `@librechat/client` declara 48 peerDependencies y ninguna
+minimiza la fricción, porque `@librechat/client` declara 50 peerDependencies y ninguna
 dependencia propia.
 
 | Pieza | Elección | Por qué |
@@ -214,7 +214,7 @@ primitivas y el preset, y escribir los componentes de tutoría propios.
 
 Lo más pequeño que ya sirve a un estudiante real:
 
-1. LibreChat vanilla desplegado y anclado a `v0.8.8` estable, con `librechat.yaml`
+1. LibreChat vanilla desplegado y anclado al último tag estable publicado (`v0.8.7` al 2026-09-09), con `librechat.yaml`
    configurado: marca de la universidad, registro restringido, un agente tutor con
    instrucciones pedagógicas y RAG sobre el material de un curso piloto.
 2. La suite de contrato en CI (§4.1), corriendo contra esa versión.

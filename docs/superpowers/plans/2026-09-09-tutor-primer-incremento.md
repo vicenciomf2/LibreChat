@@ -18,7 +18,7 @@ estable, en un repositorio propio que contiene únicamente configuración (compo
 `librechat.yaml`, material del curso) y el guardián de contrato. No se toca ningún archivo
 del árbol de LibreChat. La pedagogía vive en un agente configurado, no en código.
 
-**Stack:** Docker Compose, imagen `registry.librechat.ai/danny-avila/librechat`, MongoDB,
+**Stack:** Docker Compose, imagen `ghcr.io/danny-avila/librechat`, MongoDB,
 RAG API oficial, Node ≥ 18 para el guardián (sin dependencias).
 
 **Spec:** `docs/superpowers/specs/2026-09-09-frontend-tutorias-librechat-design.md`
@@ -29,8 +29,13 @@ Cada tarea las hereda:
 
 - **Ningún archivo del árbol de LibreChat se modifica.** Si una tarea parece exigirlo, es
   señal de que la tarea está mal planteada: detenerse y decirlo.
-- **La imagen se ancla a un tag estable**, nunca a `latest`. El tag vigente al escribir
-  esto es `v0.8.8` (el repo está en `v0.8.8-rc2`, commit `968950a`).
+- **La imagen se ancla a un tag estable**, nunca a `latest`. Verificado contra el registro
+  el 2026-09-09: `ghcr.io/danny-avila/librechat` publica hasta **`v0.8.7`** como estable;
+  `v0.8.8` todavía es `-rc2` y no tiene imagen estable. El repositorio de trabajo está en
+  `v0.8.8-rc2` (`968950a`), por delante de la última imagen publicada.
+  Los `docker-compose` del repositorio apuntan a `registry.librechat.ai/danny-avila/…`,
+  que es un espejo; el origen que publica CI es `ghcr.io` y Docker Hub
+  (`.github/workflows/docker-publish.yml:118`).
 - **La SPA propia no entra en este incremento.** Requiere decisiones abiertas del spec §8.
 - Todo secreto vive en `.env`, nunca en el repositorio.
 - El guardián apunta siempre a un entorno de ensayo, nunca a producción con datos reales.
@@ -56,7 +61,7 @@ Cada tarea las hereda:
 # tutor/docker-compose.yml
 services:
   api:
-    image: registry.librechat.ai/danny-avila/librechat:v0.8.8
+    image: ghcr.io/danny-avila/librechat:v0.8.7
     container_name: tutor-api
     ports:
       - 3080:3080
@@ -130,7 +135,7 @@ Esperado: `200`
 
 ```bash
 git add tutor/docker-compose.yml tutor/.env.example tutor/.gitignore tutor/README.md
-git commit -m "feat: despliegue de LibreChat anclado a v0.8.8"
+git commit -m "feat: despliegue de LibreChat anclado a v0.8.7"
 ```
 
 ---
@@ -204,7 +209,7 @@ jobs:
 
 ```bash
 git add tutor/guard .github/workflows/contract-guard.yml
-git commit -m "test: guardián de contrato contra LibreChat v0.8.8"
+git commit -m "test: guardián de contrato contra la versión anclada"
 ```
 
 ---
