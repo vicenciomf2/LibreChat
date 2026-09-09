@@ -199,6 +199,32 @@ dependencia propia.
 Nada de esto obliga a usar `@librechat/client` para todo: se puede empezar con las
 primitivas y el preset, y escribir los componentes de tutoría propios.
 
+### 5.1 Verificación del stack (ejecutada, no supuesta)
+
+Se creó una app externa (Vite 8 + React 19, fuera del monorepo) y se compiló y ejecutó en
+Chromium real:
+
+| Paquete | Instalación | Resultado |
+|---|---|---|
+| `librechat-data-provider` | limpia: 55 paquetes en 6 s | Compila y **corre en navegador**: `EndpointURLs[agents]` resuelve a `/api/agents/chat`, 88 query keys disponibles, cero errores de consola |
+| `@librechat/client` | **con fricción** | Requiere declarar sus 50 dependencias de pares como dependencias propias y usar `--legacy-peer-deps`; entonces instala 213 paquetes en 19 s |
+
+La fricción de `@librechat/client` tiene causa concreta: el paquete declara 0 dependencias
+y 50 peers, varios **fijados a versiones exactas antiguas** (`@radix-ui/react-alert-dialog@1.0.2`,
+`@radix-ui/react-dialog@1.0.2`), que chocan con la resolución normal de npm. Sin
+instalarlos, el build falla al resolver `@radix-ui/react-icons` desde su bundle.
+Una vez satisfechos, `Button` y `ThemeProvider` se importan y ejecutan sin errores, pero
+el bundle con solo esos dos imports pesa 1,07 MB sin dividir.
+
+**Consecuencia práctica:** adoptar `librechat-data-provider` es barato y de alto valor —
+es el contrato tipado. Adoptar `@librechat/client` es una decisión aparte, con costo de
+mantenimiento propio: conviene tomarla sólo si se van a usar bastantes componentes, con
+lockfile propio y vigilando el tamaño del bundle.
+
+Dos advertencias del empaquetado: `librechat-data-provider` importa `crypto` y `url` de
+Node, que Vite externaliza para el navegador. No rompió nada en esta prueba, pero hay que
+comprobarlo en las rutas de código que se usen de verdad.
+
 ## 6. Riesgos y mitigaciones
 
 | Riesgo | Mitigación |
