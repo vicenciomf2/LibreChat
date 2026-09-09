@@ -259,6 +259,48 @@ Cuatro capas, de más estable a más nuestra:
    por el filtro de User-Agent (§2.3.5): se integra desde el navegador del usuario o con
    su propia telemetría.
 
+### 4.0 La forma concreta, ya decidida
+
+Decisiones tomadas por el autor el 2026-09-09, que fijan la arquitectura:
+
+- La experiencia es **dos aplicaciones bajo un dominio**, no una sola. El gestor de notas
+  propio (con marimo embebido) y la interfaz de tutoría conviven como zonas separadas, con
+  navegación entre ellas — el gestor ya tiene resuelto su panel lateral.
+- Ambas son **React + Vite**, el mismo stack que los paquetes de LibreChat esperan.
+
+De ahí sale esta topología:
+
+```
+                  reverse proxy en tutor.example.cl
+   estudiante ──►  /            → gestor de notas (build propio, marimo embebido)
+                   /tutor       → interfaz de tutoría (build propio)
+                   /api/*       → LibreChat (imagen oficial anclada, :3080)
+```
+
+Tres consecuencias que se siguen de lo verificado, no de preferencias:
+
+1. **La sesión se comparte sola.** La cookie `refreshToken` es `httpOnly`, `sameSite:
+   'strict'` y de path `/` (`api/server/services/AuthService.js:721-726`). Bajo un mismo
+   dominio, ambas apps la envían automáticamente a `POST /api/auth/refresh` y cada una
+   obtiene su token de acceso. No hay que inventar ningún puente entre apps, ni pasar
+   tokens por la URL, ni duplicar login. En dominios distintos nada de esto funcionaría:
+   `sameSite: 'strict'` más `Access-Control-Allow-Origin: *` sin credenciales lo impiden.
+2. **LibreChat deja de servir interfaz.** Con el proxy, solo recibe `/api/*`. Pero sigue
+   exigiendo `client/dist/index.html` para arrancar (§2.3.1), así que basta dejar ahí un
+   HTML mínimo. Su cliente oficial no se usa ni se toca.
+3. **Marimo cabe sin pelear con la seguridad.** Si se activa el CSP, sus directivas por
+   defecto ya admiten lo que necesita Pyodide: `frame-src` incluye `blob:` y `data:`,
+   `worker-src` incluye `blob:`, y `script-src` incluye `'wasm-unsafe-eval'`
+   (`packages/api/src/security/csp.ts`), con banderas dedicadas `CSP_ALLOW_WASM` y
+   `CSP_ALLOW_DATA_WORKERS`. Queda por comprobar contra el montaje real si el notebook
+   exportado necesita además aislamiento cross-origin (COOP/COEP): la documentación de
+   marimo no lo especifica, y LibreChat hoy envía `Cross-Origin-Opener-Policy: same-origin`
+   pero **no** `Cross-Origin-Embedder-Policy`.
+
+Lo que esto le hace al resto del diseño: la capa 3 deja de ser "el segundo incremento" y
+pasa a ser el producto. La capa 4 (satélite) se disuelve — el gestor de notas *es* esa
+capa, y ya existe.
+
 ### 4.1 El contrato de actualización
 
 Lo que hace que esto "sobreviva" no es la elección de capas, sino un contrato explícito y
@@ -382,16 +424,20 @@ no depende de decisiones abiertas. Está planificado en detalle en
 Con eso un estudiante ya conversa con el tutor, y una actualización que rompa el contrato
 se detiene antes de llegar a él.
 
-**Segundo incremento** — depende de las decisiones de §8, y tendrá su propio plan:
+**Segundo incremento** — ahora desbloqueado por las decisiones de §4.0:
 
-3. RAG sobre el material de un curso piloto (requiere el servicio `rag_api` y un curso
-   concreto).
-4. La SPA propia servida desde el mismo origen: login, lista de conversaciones, chat con
-   streaming. El esqueleto de §5.2 ya demuestra que las cuatro piezas encajan; lo que
-   falta es interfaz de verdad, no integración.
+3. El reverse proxy que pone gestor de notas, interfaz de tutoría y `/api` bajo un
+   dominio, y la sesión compartida funcionando entre las dos apps (que es lo único
+   realmente nuevo respecto del esqueleto ya verificado en §5.2).
+4. La interfaz de tutoría propia: login apoyado en la sesión del dominio, lista de
+   conversaciones, chat con streaming.
+5. RAG sobre el material de un curso piloto (requiere `rag_api` y un curso concreto).
 
-El orden es deliberado: la interfaz propia es lo último, no lo primero, porque el valor
-para el estudiante no depende de ella.
+Nota sobre el orden: antes este documento dejaba la interfaz para el final, con el
+argumento de que el valor no dependía de ella. Con dos aplicaciones y un gestor de notas
+ya avanzado, ese argumento se cae — la interfaz *es* el producto. Lo que sigue en pie es
+que el primer incremento entrega valor sin ella, así que sigue yendo primero, pero por
+semanas, no por meses.
 
 ## 8. Decisiones que quedan abiertas
 
@@ -403,10 +449,16 @@ Ninguna de estas se puede deducir del código; todas cambian el diseño:
 2. **¿Autenticación institucional?** Si los estudiantes entran con la cuenta UC (Entra
    ID / OIDC), los grupos se sincronizan solos y las cohortes salen gratis. Si no, hay
    que administrar usuarios a mano.
-3. **¿Cuánto de la interfaz debe realmente ser distinta?** Si basta con marca, idioma y
+3. ~~**¿Cuánto de la interfaz debe realmente ser distinta?**~~ **RESUELTA el 2026-09-09:**
+   pantallas propias. Dos aplicaciones React + Vite bajo un dominio —un gestor de notas
+   propio con marimo embebido, ya avanzado, y la interfaz de tutoría— con LibreChat detrás
+   como motor. Ver §4.0. El texto original de la pregunta se conserva abajo porque su
+   razonamiento explica el diseño anterior:
+
+   ~~Si basta con marca, idioma y
    un tutor bien configurado, la capa 3 puede esperar meses. Si la experiencia de
    tutoría exige una interfaz propia (bloques, progreso visible, ejercicios), la SPA
-   entra antes.
+   entra antes.~~
 4. **¿Qué modelo y con qué presupuesto?** Define si conviene endpoint custom, agentes, o
    un proveedor con límites por estudiante (`balance`).
 5. **¿Un curso piloto concreto?** Tener uno hace que el RAG y las instrucciones del tutor
