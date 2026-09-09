@@ -277,20 +277,30 @@ sin manejo de errores, sin reanudación de stream. Su valor es la evidencia, no 
 | Datos personales de estudiantes | Despliegue propio, base de datos propia; el material y las conversaciones no salen de la infraestructura de la universidad |
 | Migraciones de base entre versiones | Actualizar de a un release estable por vez, con respaldo previo y verificación en un entorno de ensayo |
 
-## 7. Primer incremento propuesto
+## 7. Los dos primeros incrementos
 
-Lo más pequeño que ya sirve a un estudiante real:
+**Primer incremento** — lo más pequeño que ya sirve a un estudiante real, y lo único que
+no depende de decisiones abiertas. Está planificado en detalle en
+`docs/superpowers/plans/2026-09-09-tutor-primer-incremento.md`:
 
-1. LibreChat vanilla desplegado y anclado al último tag estable publicado (`v0.8.7` al 2026-09-09), con `librechat.yaml`
-   configurado: marca de la universidad, registro restringido, un agente tutor con
-   instrucciones pedagógicas y RAG sobre el material de un curso piloto.
-2. La suite de contrato en CI (§4.1), corriendo contra esa versión.
-3. Una SPA mínima servida desde el mismo origen: login, lista de conversaciones, chat con
-   streaming, y una pantalla de "mis cursos" que aún puede ser estática.
+1. LibreChat vanilla desplegado y anclado al último tag estable publicado (`v0.8.7` al
+   2026-09-09), con `librechat.yaml` configurado: marca de la universidad, registro
+   restringido, y un agente tutor con instrucciones pedagógicas.
+2. El guardián de contrato (§4.1) corriendo en CI contra esa versión.
 
-Los puntos 1 y 2 ya entregan valor sin la SPA: un estudiante puede usar el tutor mientras
-la interfaz propia se construye. Ese orden es deliberado — la interfaz es lo último, no lo
-primero.
+Con eso un estudiante ya conversa con el tutor, y una actualización que rompa el contrato
+se detiene antes de llegar a él.
+
+**Segundo incremento** — depende de las decisiones de §8, y tendrá su propio plan:
+
+3. RAG sobre el material de un curso piloto (requiere el servicio `rag_api` y un curso
+   concreto).
+4. La SPA propia servida desde el mismo origen: login, lista de conversaciones, chat con
+   streaming. El esqueleto de §5.2 ya demuestra que las cuatro piezas encajan; lo que
+   falta es interfaz de verdad, no integración.
+
+El orden es deliberado: la interfaz propia es lo último, no lo primero, porque el valor
+para el estudiante no depende de ella.
 
 ## 8. Decisiones que quedan abiertas
 
